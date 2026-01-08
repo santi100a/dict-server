@@ -18,7 +18,7 @@
 		"remark-cli": "^12.0.1",
 		"remark-validate-links": "^13.1.0",
 		"ts-jest": "^29.4.6",
-		"typescript": "4.9.5"
+		"typescript": "5.9.3"
 	},
 	"author": "Santiago Rojas <santyrojasprieto9+github@gmail.com>",
 	"description": "Santi's DICT Server - like Express but for RFC 2229",
