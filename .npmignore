@@ -1,0 +1,11 @@
+node_modules
+.github
+.qodo
+.vscode
+scripts
+src
+tests
+*.exe
+ignore-*.*
+*.log
+coverage
