@@ -19,7 +19,7 @@ function parseCommand(line) {
     var firstParameter = (_b = (_a = parameters[0]) === null || _a === void 0 ? void 0 : _a.toUpperCase()) !== null && _b !== void 0 ? _b : '';
     // SHOW normalization
     if (name === 'SHOW' &&
-        Object.keys(SHOW_MAP).includes(firstParameter)) {
+        Object.keys(SHOW_MAP).includes(firstParameter.toUpperCase())) {
         var normalized = SHOW_MAP[firstParameter];
         if (normalized) {
             return {
@@ -31,7 +31,7 @@ function parseCommand(line) {
         }
     }
     // OPTION normalization
-    if (name === 'OPTION' && parameters[0] === 'MIME') {
+    if (name === 'OPTION' && parameters[0].toUpperCase() === 'MIME') {
         return {
             raw: raw,
             name: 'OPTION MIME',

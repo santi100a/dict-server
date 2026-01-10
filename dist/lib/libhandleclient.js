@@ -60,7 +60,7 @@ function handleClient(socket, onCommand, response) {
                     if (!(line.length > 1024)) return [3 /*break*/, 4];
                     // Line too long - invalid!
                     return [4 /*yield*/, onCommand({
-                            raw: line,
+                            raw: line.split('').slice(0, 1024).join(''),
                             name: '',
                             parameters: [],
                             syntaxValid: false

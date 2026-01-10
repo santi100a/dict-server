@@ -43,6 +43,7 @@ var libhandleclient_1 = require("./lib/libhandleclient");
 var type_of_1 = require("@santi100a/assertion-lib/cjs/type-of");
 var assertInstanceOf = require("@santi100a/assertion-lib/cjs/instance-of");
 var range_1 = require("@santi100a/assertion-lib/cjs/range");
+var assertDefined = require("@santi100a/assertion-lib/cjs/defined");
 /**
  * The main class for implementing the DICT server.
  * All methods of this class can be chained, except for `shutdown()`.
@@ -66,7 +67,7 @@ var DictServer = /** @class */ (function () {
         /** @readonly The info text for each database. */
         this.databaseInfo = {};
         /** @readonly The help text sent by the `HELP` command. */
-        this.helpText = "DEFINE <database> <word>            -- look up word in database\n\tMATCH <database> <strategy> <word>  -- match word in database using strategy\nSHOW DB or SHOW DATABASES           -- list all accessible databases\nSHOW STRAT or SHOW STRATEGIES       -- list available matching strategies\nSHOW INFO <database>                -- provide information about the database\nSHOW SERVER                         -- provide site-specific information\nOPTION MIME                         -- use MIME headers\nCLIENT [info]                       -- identify client to server\nAUTH <user> <string>                -- provide authentication information\nSTATUS                              -- display status information\nHELP                                -- display this help information\nQUIT                                -- terminate connection";
+        this.helpText = "DEFINE <database> <word>            -- look up word in database\nMATCH <database> <strategy> <word>  -- match word in database using strategy\nSHOW DB or SHOW DATABASES           -- list all accessible databases\nSHOW STRAT or SHOW STRATEGIES       -- list available matching strategies\nSHOW INFO <database>                -- provide information about the database\nSHOW SERVER                         -- provide site-specific information\nOPTION MIME                         -- use MIME headers\nCLIENT [info]                       -- identify client to server\nAUTH <user> <string>                -- provide authentication information\nSTATUS                              -- display status information\nHELP                                -- display this help information\nQUIT                                -- terminate connection";
         /** @readonly A set of `Socket` objects representing current connections. */
         this.sockets = new Set();
         /** @private The object containing all handlers for commands. */
@@ -197,6 +198,26 @@ var DictServer = /** @class */ (function () {
         return this.command('MATCH', cb);
     };
     /**
+     * Sets a handler for the `SHOW` command, which gets called if the client sends
+     * a `SHOW` command other than `SHOW DB`, `SHOW STRAT`, `SHOW DATABASES`,
+     * `SHOW STRATEGIES`, `SHOW INFO` or `SHOW SERVER`.
+     *
+     * **NOTE:** Calling this function will override the default handler, which sends
+     * status code 501 to the client.
+     *
+     * Multiple calls to `show()` will **NOT** register multiple
+     * handlers - they will simply overwrite the previous one; thus, only the last call
+     * will register a command handler.
+     *
+     * @param {CommandHandler} cb - The handler that will be called when the `SHOW`
+     * command is received. It will be called with a {@link DictCommand} and
+     * a {@link DictResponse} object as arguments.
+     */
+    DictServer.prototype.show = function (cb) {
+        (0, type_of_1.assertTypeOf)(cb, 'function', 'cb');
+        return this.command('SHOW', cb);
+    };
+    /**
      * Sets a handler for the `SHOW DB` or `SHOW DATABASES` commands.
      *
      * **NOTE:** Calling this function will override the default handler, which sends
@@ -272,45 +293,6 @@ var DictServer = /** @class */ (function () {
         return this.command('SHOW SERVER', cb);
     };
     /**
-     * Sets a handler for the `OPTION MIME` command.
-     *
-     * **NOTE:** Calling this function will override the default handler, which sets
-     * {@link DictResponse.optionMimeEnabled} to `true` and sends status code 250 to
-     * the client. If you set a handler, make sure to implement this behavior.
-     *
-     * Multiple calls to `optionMime()` will **NOT** register multiple
-     * handlers - they will simply overwrite the previous one; thus, only the last call
-     * will register a command handler.
-     *
-     * @param {CommandHandler} cb - The handler that will be called when the `OPTION MIME`
-     * command is received. It will be called with a {@link DictCommand} and
-     * a {@link DictResponse} object as arguments.
-     */
-    DictServer.prototype.optionMime = function (cb) {
-        (0, type_of_1.assertTypeOf)(cb, 'function', 'cb');
-        return this.command('OPTION MIME', cb);
-    };
-    /**
-     * Sets a handler for the `SHOW` command, which gets called if the client sends
-     * a `SHOW` command other than `SHOW DB`, `SHOW STRAT`, `SHOW DATABASES`,
-     * `SHOW STRATEGIES`, `SHOW INFO` or `SHOW SERVER`.
-     *
-     * **NOTE:** Calling this function will override the default handler, which sends
-     * status code 501 to the client.
-     *
-     * Multiple calls to `show()` will **NOT** register multiple
-     * handlers - they will simply overwrite the previous one; thus, only the last call
-     * will register a command handler.
-     *
-     * @param {CommandHandler} cb - The handler that will be called when the `SHOW`
-     * command is received. It will be called with a {@link DictCommand} and
-     * a {@link DictResponse} object as arguments.
-     */
-    DictServer.prototype.show = function (cb) {
-        (0, type_of_1.assertTypeOf)(cb, 'function', 'cb');
-        return this.command('SHOW', cb);
-    };
-    /**
      * Sets a handler for the `OPTION` command, which gets called if the client sends
      * an `OPTION` command other than `OPTION MIME`.
      *
@@ -328,6 +310,25 @@ var DictServer = /** @class */ (function () {
     DictServer.prototype.option = function (cb) {
         (0, type_of_1.assertTypeOf)(cb, 'function', 'cb');
         return this.command('OPTION', cb);
+    };
+    /**
+     * Sets a handler for the `OPTION MIME` command.
+     *
+     * **NOTE:** Calling this function will override the default handler, which sets
+     * {@link DictResponse.optionMimeEnabled} to `true` and sends status code 250 to
+     * the client. If you set a handler, make sure to implement this behavior.
+     *
+     * Multiple calls to `optionMime()` will **NOT** register multiple
+     * handlers - they will simply overwrite the previous one; thus, only the last call
+     * will register a command handler.
+     *
+     * @param {CommandHandler} cb - The handler that will be called when the `OPTION MIME`
+     * command is received. It will be called with a {@link DictCommand} and
+     * a {@link DictResponse} object as arguments.
+     */
+    DictServer.prototype.optionMime = function (cb) {
+        (0, type_of_1.assertTypeOf)(cb, 'function', 'cb');
+        return this.command('OPTION MIME', cb);
     };
     /**
      * Sets a handler for the `CLIENT` command.
@@ -348,6 +349,36 @@ var DictServer = /** @class */ (function () {
     DictServer.prototype.client = function (cb) {
         (0, type_of_1.assertTypeOf)(cb, 'function', 'cb');
         return this.command('CLIENT', cb);
+    };
+    /**
+     * Sets a handler for the `AUTH` command.
+     *
+     * **NOTE:** Multiple calls to `auth()` will **NOT** register multiple
+     * handlers - they will simply overwrite the previous one; thus, only the last call
+     * will register a command handler.
+     *
+     * @param {CommandHandler} cb - The handler that will be called when the `AUTH`
+     * command is received. It will be called with a {@link DictCommand} and
+     * a {@link DictResponse} object as arguments.
+     */
+    DictServer.prototype.auth = function (cb) {
+        (0, type_of_1.assertTypeOf)(cb, 'function', 'cb');
+        return this.command('AUTH', cb);
+    };
+    /**
+     * Sets a handler for the `SASLAUTH` command.
+     *
+     * **NOTE:** Multiple calls to `saslAuth()` will **NOT** register multiple
+     * handlers - they will simply overwrite the previous one; thus, only the last call
+     * will register a command handler.
+     *
+     * @param {CommandHandler} cb - The handler that will be called when the `SASLAUTH`
+     * command is received. It will be called with a {@link DictCommand} and
+     * a {@link DictResponse} object as arguments.
+     */
+    DictServer.prototype.saslAuth = function (cb) {
+        (0, type_of_1.assertTypeOf)(cb, 'function', 'cb');
+        return this.command('SASLAUTH', cb);
     };
     /**
      * Sets a handler for the `STATUS` command.
@@ -572,6 +603,12 @@ var DictServer = /** @class */ (function () {
             databases[_i] = arguments[_i];
         }
         assertInstanceOf(databases, Array, 'databases');
+        databases.forEach(function (database, index) {
+            assertDefined(database, "databases[".concat(index, "]"));
+            (0, type_of_1.assertTypeOf)(database, 'object', "databases[".concat(index, "]"));
+            (0, type_of_1.assertTypeOf)(database.name, 'string', "databases[".concat(index, "].name"));
+            (0, type_of_1.assertTypeOf)(database.description, 'string', "databases[".concat(index, "].description"));
+        });
         this.databases = databases;
         return this;
     };
@@ -626,30 +663,32 @@ var DictServer = /** @class */ (function () {
      */
     DictServer.prototype.shutdown = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var closePromise, _i, _a, sock;
+            var socketsToDestroy, _i, socketsToDestroy_1, sock;
             var _this = this;
-            return __generator(this, function (_b) {
-                switch (_b.label) {
-                    case 0:
-                        closePromise = new Promise(function (resolve, reject) {
-                            _this.__server.close(function (err) { return (err ? reject(err) : resolve()); });
-                        });
-                        // Destroy active sockets
-                        // @ts-expect-error: ES2015
-                        for (_i = 0, _a = this.sockets; _i < _a.length; _i++) {
-                            sock = _a[_i];
-                            try {
-                                sock.destroy();
-                            }
-                            catch (_c) { }
+            return __generator(this, function (_a) {
+                socketsToDestroy = Array.from(this.sockets);
+                for (_i = 0, socketsToDestroy_1 = socketsToDestroy; _i < socketsToDestroy_1.length; _i++) {
+                    sock = socketsToDestroy_1[_i];
+                    if (!sock.destroyed) {
+                        try {
+                            sock.destroy();
                         }
-                        // Wait for full close
-                        return [4 /*yield*/, closePromise];
-                    case 1:
-                        // Wait for full close
-                        _b.sent();
-                        return [2 /*return*/, this];
+                        catch (_b) {
+                            // Ignore errors during shutdown
+                        }
+                    }
                 }
+                // Clear the socket set
+                this.sockets.clear();
+                // Now close the server (should be immediate since sockets are destroyed)
+                return [2 /*return*/, new Promise(function (resolve, reject) {
+                        _this.__server.close(function (err) {
+                            if (err)
+                                reject(err);
+                            else
+                                resolve(_this);
+                        });
+                    })];
             });
         });
     };

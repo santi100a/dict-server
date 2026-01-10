@@ -20,7 +20,7 @@ export function parseCommand(line: string): DictCommand {
 	// SHOW normalization
 	if (
 		name === 'SHOW' &&
-		Object.keys(SHOW_MAP).includes(firstParameter)
+		Object.keys(SHOW_MAP).includes(firstParameter.toUpperCase())
 	) {
 		const normalized = SHOW_MAP[firstParameter];
 		if (normalized) {
@@ -34,7 +34,7 @@ export function parseCommand(line: string): DictCommand {
 	}
 
 	// OPTION normalization
-	if (name === 'OPTION' && parameters[0] === 'MIME') {
+	if (name === 'OPTION' && parameters[0].toUpperCase() === 'MIME') {
 		return {
 			raw,
 			name: 'OPTION MIME',

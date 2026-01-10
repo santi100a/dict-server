@@ -24,7 +24,7 @@ export async function handleClient(
 			// Line too long - invalid!
 			await onCommand(
 				{
-					raw: line,
+					raw: line.split('').slice(0, 1024).join(''),
 					name: '',
 					parameters: [],
 					syntaxValid: false

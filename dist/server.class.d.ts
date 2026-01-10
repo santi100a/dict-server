@@ -51,6 +51,23 @@ export declare class DictServer {
      */
     match<T>(cb: CommandHandler<T>): this;
     /**
+     * Sets a handler for the `SHOW` command, which gets called if the client sends
+     * a `SHOW` command other than `SHOW DB`, `SHOW STRAT`, `SHOW DATABASES`,
+     * `SHOW STRATEGIES`, `SHOW INFO` or `SHOW SERVER`.
+     *
+     * **NOTE:** Calling this function will override the default handler, which sends
+     * status code 501 to the client.
+     *
+     * Multiple calls to `show()` will **NOT** register multiple
+     * handlers - they will simply overwrite the previous one; thus, only the last call
+     * will register a command handler.
+     *
+     * @param {CommandHandler} cb - The handler that will be called when the `SHOW`
+     * command is received. It will be called with a {@link DictCommand} and
+     * a {@link DictResponse} object as arguments.
+     */
+    show<T>(cb: CommandHandler<T>): this;
+    /**
      * Sets a handler for the `SHOW DB` or `SHOW DATABASES` commands.
      *
      * **NOTE:** Calling this function will override the default handler, which sends
@@ -114,39 +131,6 @@ export declare class DictServer {
      */
     showServer<T>(cb: CommandHandler<T>): this;
     /**
-     * Sets a handler for the `OPTION MIME` command.
-     *
-     * **NOTE:** Calling this function will override the default handler, which sets
-     * {@link DictResponse.optionMimeEnabled} to `true` and sends status code 250 to
-     * the client. If you set a handler, make sure to implement this behavior.
-     *
-     * Multiple calls to `optionMime()` will **NOT** register multiple
-     * handlers - they will simply overwrite the previous one; thus, only the last call
-     * will register a command handler.
-     *
-     * @param {CommandHandler} cb - The handler that will be called when the `OPTION MIME`
-     * command is received. It will be called with a {@link DictCommand} and
-     * a {@link DictResponse} object as arguments.
-     */
-    optionMime<T>(cb: CommandHandler<T>): this;
-    /**
-     * Sets a handler for the `SHOW` command, which gets called if the client sends
-     * a `SHOW` command other than `SHOW DB`, `SHOW STRAT`, `SHOW DATABASES`,
-     * `SHOW STRATEGIES`, `SHOW INFO` or `SHOW SERVER`.
-     *
-     * **NOTE:** Calling this function will override the default handler, which sends
-     * status code 501 to the client.
-     *
-     * Multiple calls to `show()` will **NOT** register multiple
-     * handlers - they will simply overwrite the previous one; thus, only the last call
-     * will register a command handler.
-     *
-     * @param {CommandHandler} cb - The handler that will be called when the `SHOW`
-     * command is received. It will be called with a {@link DictCommand} and
-     * a {@link DictResponse} object as arguments.
-     */
-    show<T>(cb: CommandHandler<T>): this;
-    /**
      * Sets a handler for the `OPTION` command, which gets called if the client sends
      * an `OPTION` command other than `OPTION MIME`.
      *
@@ -162,6 +146,22 @@ export declare class DictServer {
      * a {@link DictResponse} object as arguments.
      */
     option<T>(cb: CommandHandler<T>): this;
+    /**
+     * Sets a handler for the `OPTION MIME` command.
+     *
+     * **NOTE:** Calling this function will override the default handler, which sets
+     * {@link DictResponse.optionMimeEnabled} to `true` and sends status code 250 to
+     * the client. If you set a handler, make sure to implement this behavior.
+     *
+     * Multiple calls to `optionMime()` will **NOT** register multiple
+     * handlers - they will simply overwrite the previous one; thus, only the last call
+     * will register a command handler.
+     *
+     * @param {CommandHandler} cb - The handler that will be called when the `OPTION MIME`
+     * command is received. It will be called with a {@link DictCommand} and
+     * a {@link DictResponse} object as arguments.
+     */
+    optionMime<T>(cb: CommandHandler<T>): this;
     /**
      * Sets a handler for the `CLIENT` command.
      *
@@ -179,6 +179,30 @@ export declare class DictServer {
      * a {@link DictResponse} object as arguments.
      */
     client<T>(cb: CommandHandler<T>): this;
+    /**
+     * Sets a handler for the `AUTH` command.
+     *
+     * **NOTE:** Multiple calls to `auth()` will **NOT** register multiple
+     * handlers - they will simply overwrite the previous one; thus, only the last call
+     * will register a command handler.
+     *
+     * @param {CommandHandler} cb - The handler that will be called when the `AUTH`
+     * command is received. It will be called with a {@link DictCommand} and
+     * a {@link DictResponse} object as arguments.
+     */
+    auth<T>(cb: CommandHandler<T>): this;
+    /**
+     * Sets a handler for the `SASLAUTH` command.
+     *
+     * **NOTE:** Multiple calls to `saslAuth()` will **NOT** register multiple
+     * handlers - they will simply overwrite the previous one; thus, only the last call
+     * will register a command handler.
+     *
+     * @param {CommandHandler} cb - The handler that will be called when the `SASLAUTH`
+     * command is received. It will be called with a {@link DictCommand} and
+     * a {@link DictResponse} object as arguments.
+     */
+    saslAuth<T>(cb: CommandHandler<T>): this;
     /**
      * Sets a handler for the `STATUS` command.
      *

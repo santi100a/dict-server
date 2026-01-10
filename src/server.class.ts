@@ -10,6 +10,7 @@ import { handleClient } from './lib/libhandleclient';
 import { assertTypeOf } from '@santi100a/assertion-lib/cjs/type-of';
 import assertInstanceOf = require('@santi100a/assertion-lib/cjs/instance-of');
 import { assertRange } from '@santi100a/assertion-lib/cjs/range';
+import assertDefined = require('@santi100a/assertion-lib/cjs/defined');
 
 /**
  * The main class for implementing the DICT server.
@@ -143,7 +144,7 @@ export class DictServer {
 
 	/** @readonly The help text sent by the `HELP` command. */
 	helpText = `DEFINE <database> <word>            -- look up word in database
-	MATCH <database> <strategy> <word>  -- match word in database using strategy
+MATCH <database> <strategy> <word>  -- match word in database using strategy
 SHOW DB or SHOW DATABASES           -- list all accessible databases
 SHOW STRAT or SHOW STRATEGIES       -- list available matching strategies
 SHOW INFO <database>                -- provide information about the database
@@ -192,6 +193,26 @@ QUIT                                -- terminate connection`;
 		return this.command('MATCH', cb);
 	}
 
+	/**
+	 * Sets a handler for the `SHOW` command, which gets called if the client sends
+	 * a `SHOW` command other than `SHOW DB`, `SHOW STRAT`, `SHOW DATABASES`,
+	 * `SHOW STRATEGIES`, `SHOW INFO` or `SHOW SERVER`.
+	 *
+	 * **NOTE:** Calling this function will override the default handler, which sends
+	 * status code 501 to the client.
+	 *
+	 * Multiple calls to `show()` will **NOT** register multiple
+	 * handlers - they will simply overwrite the previous one; thus, only the last call
+	 * will register a command handler.
+	 *
+	 * @param {CommandHandler} cb - The handler that will be called when the `SHOW`
+	 * command is received. It will be called with a {@link DictCommand} and
+	 * a {@link DictResponse} object as arguments.
+	 */
+	show<T>(cb: CommandHandler<T>): this {
+		assertTypeOf(cb, 'function', 'cb');
+		return this.command('SHOW', cb);
+	}
 	/**
 	 * Sets a handler for the `SHOW DB` or `SHOW DATABASES` commands.
 	 *
@@ -272,47 +293,6 @@ QUIT                                -- terminate connection`;
 	}
 
 	/**
-	 * Sets a handler for the `OPTION MIME` command.
-	 *
-	 * **NOTE:** Calling this function will override the default handler, which sets
-	 * {@link DictResponse.optionMimeEnabled} to `true` and sends status code 250 to
-	 * the client. If you set a handler, make sure to implement this behavior.
-	 *
-	 * Multiple calls to `optionMime()` will **NOT** register multiple
-	 * handlers - they will simply overwrite the previous one; thus, only the last call
-	 * will register a command handler.
-	 *
-	 * @param {CommandHandler} cb - The handler that will be called when the `OPTION MIME`
-	 * command is received. It will be called with a {@link DictCommand} and
-	 * a {@link DictResponse} object as arguments.
-	 */
-	optionMime<T>(cb: CommandHandler<T>): this {
-		assertTypeOf(cb, 'function', 'cb');
-		return this.command('OPTION MIME', cb);
-	}
-
-	/**
-	 * Sets a handler for the `SHOW` command, which gets called if the client sends
-	 * a `SHOW` command other than `SHOW DB`, `SHOW STRAT`, `SHOW DATABASES`,
-	 * `SHOW STRATEGIES`, `SHOW INFO` or `SHOW SERVER`.
-	 *
-	 * **NOTE:** Calling this function will override the default handler, which sends
-	 * status code 501 to the client.
-	 *
-	 * Multiple calls to `show()` will **NOT** register multiple
-	 * handlers - they will simply overwrite the previous one; thus, only the last call
-	 * will register a command handler.
-	 *
-	 * @param {CommandHandler} cb - The handler that will be called when the `SHOW`
-	 * command is received. It will be called with a {@link DictCommand} and
-	 * a {@link DictResponse} object as arguments.
-	 */
-	show<T>(cb: CommandHandler<T>): this {
-		assertTypeOf(cb, 'function', 'cb');
-		return this.command('SHOW', cb);
-	}
-
-	/**
 	 * Sets a handler for the `OPTION` command, which gets called if the client sends
 	 * an `OPTION` command other than `OPTION MIME`.
 	 *
@@ -330,6 +310,26 @@ QUIT                                -- terminate connection`;
 	option<T>(cb: CommandHandler<T>): this {
 		assertTypeOf(cb, 'function', 'cb');
 		return this.command('OPTION', cb);
+	}
+
+	/**
+	 * Sets a handler for the `OPTION MIME` command.
+	 *
+	 * **NOTE:** Calling this function will override the default handler, which sets
+	 * {@link DictResponse.optionMimeEnabled} to `true` and sends status code 250 to
+	 * the client. If you set a handler, make sure to implement this behavior.
+	 *
+	 * Multiple calls to `optionMime()` will **NOT** register multiple
+	 * handlers - they will simply overwrite the previous one; thus, only the last call
+	 * will register a command handler.
+	 *
+	 * @param {CommandHandler} cb - The handler that will be called when the `OPTION MIME`
+	 * command is received. It will be called with a {@link DictCommand} and
+	 * a {@link DictResponse} object as arguments.
+	 */
+	optionMime<T>(cb: CommandHandler<T>): this {
+		assertTypeOf(cb, 'function', 'cb');
+		return this.command('OPTION MIME', cb);
 	}
 
 	/**
@@ -351,6 +351,38 @@ QUIT                                -- terminate connection`;
 	client<T>(cb: CommandHandler<T>): this {
 		assertTypeOf(cb, 'function', 'cb');
 		return this.command('CLIENT', cb);
+	}
+
+	/**
+	 * Sets a handler for the `AUTH` command.
+	 *
+	 * **NOTE:** Multiple calls to `auth()` will **NOT** register multiple
+	 * handlers - they will simply overwrite the previous one; thus, only the last call
+	 * will register a command handler.
+	 *
+	 * @param {CommandHandler} cb - The handler that will be called when the `AUTH`
+	 * command is received. It will be called with a {@link DictCommand} and
+	 * a {@link DictResponse} object as arguments.
+	 */
+	auth<T>(cb: CommandHandler<T>): this {
+		assertTypeOf(cb, 'function', 'cb');
+		return this.command('AUTH', cb);
+	}
+
+	/**
+	 * Sets a handler for the `SASLAUTH` command.
+	 *
+	 * **NOTE:** Multiple calls to `saslAuth()` will **NOT** register multiple
+	 * handlers - they will simply overwrite the previous one; thus, only the last call
+	 * will register a command handler.
+	 *
+	 * @param {CommandHandler} cb - The handler that will be called when the `SASLAUTH`
+	 * command is received. It will be called with a {@link DictCommand} and
+	 * a {@link DictResponse} object as arguments.
+	 */
+	saslAuth<T>(cb: CommandHandler<T>): this {
+		assertTypeOf(cb, 'function', 'cb');
+		return this.command('SASLAUTH', cb);
 	}
 
 	/**
@@ -577,6 +609,16 @@ QUIT                                -- terminate connection`;
 	 */
 	setDatabases(...databases: DatabaseInfo[]) {
 		assertInstanceOf(databases, Array, 'databases');
+		databases.forEach((database, index) => {
+			assertDefined(database, `databases[${index}]`);
+			assertTypeOf(database, 'object', `databases[${index}]`);
+			assertTypeOf(database.name, 'string', `databases[${index}].name`);
+			assertTypeOf(
+				database.description,
+				'string',
+				`databases[${index}].description`
+			);
+		});
 		this.databases = databases;
 		return this;
 	}
@@ -635,22 +677,28 @@ QUIT                                -- terminate connection`;
 	 * @throws If the server was already down.
 	 */
 	async shutdown(): Promise<this> {
-		// Stop accepting new connections
-		const closePromise = new Promise<void>((resolve, reject) => {
-			this.__server.close(err => (err ? reject(err) : resolve()));
-		});
-
-		// Destroy active sockets
-		// @ts-expect-error: ES2015
-		for (const sock of this.sockets) {
-			try {
-				sock.destroy();
-			} catch {}
+		// Destroy all active sockets FIRST
+		const socketsToDestroy = Array.from(this.sockets);
+		for (const sock of socketsToDestroy) {
+			if (!sock.destroyed) {
+				try {
+					sock.destroy();
+				} catch {
+					// Ignore errors during shutdown
+				}
+			}
 		}
 
-		// Wait for full close
-		await closePromise;
-		return this;
+		// Clear the socket set
+		this.sockets.clear();
+
+		// Now close the server (should be immediate since sockets are destroyed)
+		return new Promise((resolve, reject) => {
+			this.__server.close(err => {
+				if (err) reject(err);
+				else resolve(this);
+			});
+		});
 	}
 
 	/**
