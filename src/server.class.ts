@@ -65,6 +65,7 @@ export class DictServer {
 			},
 			AUTH: (_, response) => response.error(502),
 			SASLAUTH: (_, response) => response.error(502),
+			SASLRESP: (_, response) => response.error(502),
 			STATUS: (_, response) => response.ok(),
 			HELP: (_, response) => {
 				response.status(113).writeMessage(this.helpText).ok();
@@ -293,46 +294,6 @@ QUIT                                -- terminate connection`;
 	}
 
 	/**
-	 * Sets a handler for the `OPTION` command, which gets called if the client sends
-	 * an `OPTION` command other than `OPTION MIME`.
-	 *
-	 * **NOTE:** Calling this function will override the default handler, which sends
-	 * status code 501 to the client.
-	 *
-	 * Multiple calls to `option()` will **NOT** register multiple
-	 * handlers - they will simply overwrite the previous one; thus, only the last call
-	 * will register a command handler.
-	 *
-	 * @param {CommandHandler} cb - The handler that will be called when the `OPTION`
-	 * command is received. It will be called with a {@link DictCommand} and
-	 * a {@link DictResponse} object as arguments.
-	 */
-	option<T>(cb: CommandHandler<T>): this {
-		assertTypeOf(cb, 'function', 'cb');
-		return this.command('OPTION', cb);
-	}
-
-	/**
-	 * Sets a handler for the `OPTION MIME` command.
-	 *
-	 * **NOTE:** Calling this function will override the default handler, which sets
-	 * {@link DictResponse.optionMimeEnabled} to `true` and sends status code 250 to
-	 * the client. If you set a handler, make sure to implement this behavior.
-	 *
-	 * Multiple calls to `optionMime()` will **NOT** register multiple
-	 * handlers - they will simply overwrite the previous one; thus, only the last call
-	 * will register a command handler.
-	 *
-	 * @param {CommandHandler} cb - The handler that will be called when the `OPTION MIME`
-	 * command is received. It will be called with a {@link DictCommand} and
-	 * a {@link DictResponse} object as arguments.
-	 */
-	optionMime<T>(cb: CommandHandler<T>): this {
-		assertTypeOf(cb, 'function', 'cb');
-		return this.command('OPTION MIME', cb);
-	}
-
-	/**
 	 * Sets a handler for the `CLIENT` command.
 	 *
 	 * **NOTE:** Calling this function will override the default handler, which sets
@@ -351,38 +312,6 @@ QUIT                                -- terminate connection`;
 	client<T>(cb: CommandHandler<T>): this {
 		assertTypeOf(cb, 'function', 'cb');
 		return this.command('CLIENT', cb);
-	}
-
-	/**
-	 * Sets a handler for the `AUTH` command.
-	 *
-	 * **NOTE:** Multiple calls to `auth()` will **NOT** register multiple
-	 * handlers - they will simply overwrite the previous one; thus, only the last call
-	 * will register a command handler.
-	 *
-	 * @param {CommandHandler} cb - The handler that will be called when the `AUTH`
-	 * command is received. It will be called with a {@link DictCommand} and
-	 * a {@link DictResponse} object as arguments.
-	 */
-	auth<T>(cb: CommandHandler<T>): this {
-		assertTypeOf(cb, 'function', 'cb');
-		return this.command('AUTH', cb);
-	}
-
-	/**
-	 * Sets a handler for the `SASLAUTH` command.
-	 *
-	 * **NOTE:** Multiple calls to `saslAuth()` will **NOT** register multiple
-	 * handlers - they will simply overwrite the previous one; thus, only the last call
-	 * will register a command handler.
-	 *
-	 * @param {CommandHandler} cb - The handler that will be called when the `SASLAUTH`
-	 * command is received. It will be called with a {@link DictCommand} and
-	 * a {@link DictResponse} object as arguments.
-	 */
-	saslAuth<T>(cb: CommandHandler<T>): this {
-		assertTypeOf(cb, 'function', 'cb');
-		return this.command('SASLAUTH', cb);
 	}
 
 	/**
@@ -443,6 +372,94 @@ QUIT                                -- terminate connection`;
 	quit<T>(cb: CommandHandler<T>): this {
 		assertTypeOf(cb, 'function', 'cb');
 		return this.command('QUIT', cb);
+	}
+
+	/**
+	 * Sets a handler for the `OPTION` command, which gets called if the client sends
+	 * an `OPTION` command other than `OPTION MIME`.
+	 *
+	 * **NOTE:** Calling this function will override the default handler, which sends
+	 * status code 501 to the client.
+	 *
+	 * Multiple calls to `option()` will **NOT** register multiple
+	 * handlers - they will simply overwrite the previous one; thus, only the last call
+	 * will register a command handler.
+	 *
+	 * @param {CommandHandler} cb - The handler that will be called when the `OPTION`
+	 * command is received. It will be called with a {@link DictCommand} and
+	 * a {@link DictResponse} object as arguments.
+	 */
+	option<T>(cb: CommandHandler<T>): this {
+		assertTypeOf(cb, 'function', 'cb');
+		return this.command('OPTION', cb);
+	}
+
+	/**
+	 * Sets a handler for the `OPTION MIME` command.
+	 *
+	 * **NOTE:** Calling this function will override the default handler, which sets
+	 * {@link DictResponse.optionMimeEnabled} to `true` and sends status code 250 to
+	 * the client. If you set a handler, make sure to implement this behavior.
+	 *
+	 * Multiple calls to `optionMime()` will **NOT** register multiple
+	 * handlers - they will simply overwrite the previous one; thus, only the last call
+	 * will register a command handler.
+	 *
+	 * @param {CommandHandler} cb - The handler that will be called when the `OPTION MIME`
+	 * command is received. It will be called with a {@link DictCommand} and
+	 * a {@link DictResponse} object as arguments.
+	 */
+	optionMime<T>(cb: CommandHandler<T>): this {
+		assertTypeOf(cb, 'function', 'cb');
+		return this.command('OPTION MIME', cb);
+	}
+
+	/**
+	 * Sets a handler for the `AUTH` command.
+	 *
+	 * **NOTE:** Multiple calls to `auth()` will **NOT** register multiple
+	 * handlers - they will simply overwrite the previous one; thus, only the last call
+	 * will register a command handler.
+	 *
+	 * @param {CommandHandler} cb - The handler that will be called when the `AUTH`
+	 * command is received. It will be called with a {@link DictCommand} and
+	 * a {@link DictResponse} object as arguments.
+	 */
+	auth<T>(cb: CommandHandler<T>): this {
+		assertTypeOf(cb, 'function', 'cb');
+		return this.command('AUTH', cb);
+	}
+
+	/**
+	 * Sets a handler for the `SASLAUTH` command.
+	 *
+	 * **NOTE:** Multiple calls to `saslAuth()` will **NOT** register multiple
+	 * handlers - they will simply overwrite the previous one; thus, only the last call
+	 * will register a command handler.
+	 *
+	 * @param {CommandHandler} cb - The handler that will be called when the `SASLAUTH`
+	 * command is received. It will be called with a {@link DictCommand} and
+	 * a {@link DictResponse} object as arguments.
+	 */
+	saslAuth<T>(cb: CommandHandler<T>): this {
+		assertTypeOf(cb, 'function', 'cb');
+		return this.command('SASLAUTH', cb);
+	}
+
+	/**
+	 * Sets a handler for the `SASLRESP` command.
+	 *
+	 * **NOTE:** Multiple calls to `saslResp()` will **NOT** register multiple
+	 * handlers - they will simply overwrite the previous one; thus, only the last call
+	 * will register a command handler.
+	 *
+	 * @param {CommandHandler} cb - The handler that will be called when the `SASLRESP`
+	 * command is received. It will be called with a {@link DictCommand} and
+	 * a {@link DictResponse} object as arguments.
+	 */
+	saslResp<T>(cb: CommandHandler<T>): this {
+		assertTypeOf(cb, 'function', 'cb');
+		return this.command('SASLRESP', cb);
 	}
 
 	// Event handlers
