@@ -1,5 +1,5 @@
 "use strict";
-exports.__esModule = true;
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.lfToCrlf = void 0;
 function lfToCrlf(input) {
     return input.replace(/\r\n/g, '\n') // normalize first

@@ -28,7 +28,7 @@ It includes:
 
 - A TCP-based DICT server
 - A `DictResponse` class for RFC-compliant protocol replies
-- Optional metadata configuration (server banner, info, strategies, databases, etc.)
+- Server configuration (server banner, info, strategies, databases, etc.)
 - Async handler model
 - Graceful shutdown
 
@@ -42,53 +42,7 @@ pnpm add @santi100a/dict-server # PNPM
 
 ## Usage
 
-### Usage example
-
-```javascript
-
-import { DictServer } from '@santi100a/dict-server/server.class'; // TypeScript, OR
-const DictServer = require('@santi100a/dict-server'); // CommonJS
-
-// Create a new DICT server instance
-const server = new DictServer();
-
-// Configure metadata
-server
-  .setServerInfo('MyDictServer 1.0')
-  .setDatabases([
-    { name: 'simple', desc: 'Simple example dictionary' }
-  ])
-  .setStrategies([
-    { name: 'exact', desc: 'Exact string matching' }
-  ]);
-
-// Register a DEFINE handler
-server.define(async (cmd, res) => {
-  const [db, word] = cmd.arguments;
-  if (db !== '*' && db !== 'simple') {
-    return res.status(550, 'no database present');
-  }
-
-  if (word === 'example') {
-    res.writeDefinitions([{
-      database: 'simple',
-      dictionary: 'simple',
-      dictionaryDescription: 'Simple example dictionary',
-      definition: 'An example definition of the word "example".'
-    }]);
-    return res.status(250, 'ok');
-  }
-
-  return res.status(552, 'no match');
-});
-
-// Bind to a port
-server.listen(2628, () => {
-  console.log('DICT server listening on port 2628');
-});
-```
-
-Then from a DICT client or TCP terminal program:
+From a DICT client or TCP terminal program:
 
 ```sh
 dict -h localhost example # dictd's dict client
@@ -105,7 +59,7 @@ server.match(fn);         // MATCH word using strategy
 server.showDatabases(fn); // SHOW DATABASES
 server.showStrategies(fn);// SHOW STRATEGIES
 server.showServer(fn);    // SHOW SERVER
-server.showStatus(fn);    // STATUS
+server.status(fn);        // STATUS
 server.client(fn);        // CLIENT
 ```
 
@@ -118,9 +72,9 @@ Your handlers reply using DictResponse, which exposes convenient methods like:
 
 ```javascript
 res.status(250, 'ok');
+res.writeln(...);
 res.writeDefinitions(...);
-res.writeMatches(...);
-res.writeDatabases(...);
+res.writeMultiline(...);
 ```
 
 Response formatting (dot-stuffing, CRLF conventions, etc.) is handled for you.

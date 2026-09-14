@@ -34,7 +34,7 @@ export function parseCommand(line: string): DictCommand {
 	}
 
 	// OPTION normalization
-	if (name === 'OPTION' && parameters[0].toUpperCase() === 'MIME') {
+	if (name === 'OPTION' && firstParameter === 'MIME') {
 		return {
 			raw,
 			name: 'OPTION MIME',

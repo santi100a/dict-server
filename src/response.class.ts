@@ -1,353 +1,147 @@
-import assertDefined = require('@santi100a/assertion-lib/cjs/defined');
-import assertInstanceOf = require('@santi100a/assertion-lib/cjs/instance-of');
-import assertTypeOf = require('@santi100a/assertion-lib/cjs/type-of');
-import { Socket } from 'node:net';
-import { dotStuff } from './lib/libdotstuff';
-import { lfToCrlf } from './lib/liblftocrlf';
-import { sanitize } from './lib/libsanitize';
-import { StatusCode, StatusMap, statusText } from './lib/libstatuscodes';
-import { DatabaseInfo, DictDefinition, MatchEntry } from './lib/libtypes';
+import { assertInstanceOf, assertTypeOf, assertArray, assertOneOfTypes } from '@santi100a/assertion-lib';
+import { type Socket } from 'node:net';
+import { ErrorHandler, DictCommand, DictDefinition } from './lib/libtypes';
 
-/**
- * Utility class for responses from the DICT server.
- * All methods of this class can be chained, except for `write()`.
- */
-export class DictResponse extends Socket {
-	constructor(socket: Socket) {
-		super();
-		this.__socket = socket;
-		// Set __socket BEFORE changing prototype
-		Object.defineProperty(socket, '__socket', {
-			value: socket,
-			writable: false,
-			enumerable: false,
-			configurable: false
-		});
+export class DictResponse {
+	lastCommand: DictCommand | null = null;
+	initialized = false;
+	authenticated = false;
+	optionMime = false;
+	messageId = '';
+	clientName = '';
 
-		// Now change the prototype
-		Object.setPrototypeOf(socket, DictResponse.prototype);
+	constructor(
+		private readonly __socket: Socket,
+		private readonly __hostname: string,
+		private readonly __capabilities: string[],
+		private readonly __statusCodes: Record<number | string, string>,
+		private readonly __errorHandlers: Record<string, ErrorHandler>,
+		private readonly __generateMessageId: () => string,
+		private readonly __generateWelcome: () => string
+	) {}
 
-		// Return the modified socket
-		return socket as DictResponse;
-	}
-
-	/** @readonly Whether or not MIME headers are enabled by the `OPTION MIME` command. */
-	optionMimeEnabled = false;
-
-	/** @readonly The text specified in the `CLIENT` command. */
-	clientText = '';
-
-	/**
-	 * Writes a string as an RFC 5322 internet message (i.e. headers, text,
-	 * and `<CRLF>.<CRLF>`).
-	 *
-	 * @param {string} message - The raw text body of the message.
-	 * @param {Record} headers - The headers to be added before the message.
-	 */
-	writeMessage(message: string, headers: Record<string, string> = {}) {
-		for (const [key, value] of Object.entries(headers)) {
-			this.writeLine(`${key}: ${value}`);
-		}
-		if (Object.entries(headers).length > 0) this.writeLine();
-		for (const line of dotStuff(lfToCrlf(message)).split('\r\n')) {
-			this.writeLine(line);
-		}
-		this.writeLine('.');
-		return this;
-	}
-
-	/**
-	 * Writes a line of text and appends `<CRLF>` at the end.
-	 *
-	 * @param {string} line - The line to be written. Shouldn't include CR or LF.
-	 */
-	writeLine(line: string = '') {
-		this.safeWrite(sanitize(line) + '\r\n');
-		return this;
-	}
-
-	/**
-	 *
-	 * @param {number} code - The status code to be set.
-	 * Should be specified in [RFC 2229](https://www.rfc-editor.org/rfc/rfc2229#section-7).
-	 * @param params - Parameters to be specified for the status code:
-	 * @example
-	 *
-	 * response.status(110, [4]); // will send: '110 4 databases present - text follows'
-	 * response.status(150, [3]); // will send: '150 3 definitions retrieved - text follows'
-	 * response.status(151, [{
-	 * 	HEADWORD: 'word',
-	 * 	DICTNAME: 'dictionary',
-	 * 	DICTDESC: 'Dictionary Name'
-	 * }]); // will send: '151 "word" dictionary "Dictionary Name"'
-	 *
-	 * @param {string?} message - The message to send instead of the default
-	 * "definitions retrieved - text follows".
-	 * @example
-	 *
-	 * response.status(110, [3], 'definition blocks found:'); // will send: '110 3 definitions blocks found:'
-	 *
-	 * @see [RFC 2229, section 7](https://www.rfc-editor.org/rfc/rfc2229#section-7)
-	 */
-	status<K extends keyof StatusMap>(
-		code: number,
-		params: Parameters<StatusMap[K]> = [] as Parameters<StatusMap[K]>,
-		message: string = statusText(code as StatusCode, ...params)
-	) {
-		return this.writeLine(`${code} ${message}`);
-	}
-
-	/**
-	 * Writes a raw string. Calls the superclass method {@link Socket.write()}.
-	 *
-	 * **NOTE: THIS METHOD DOES NOT RETURN THE `this` OBJECT AND, THUS,
-	 * CANNOT BE CHAINED - MAKE SURE TO CALL IT ON ITS OWN OR AT THE END
-	 * OF A METHOD CHAIN.**
-	 *
-	 * @param {string} data - The string to be sent.
-	 * @returns Whether or not the whole string was successfully sent to kernel buffer
-	 * (see {@link Socket.write()}).
-	 *
-	 * @see {@link Socket.write()}
-	 */
-	write(data: string): boolean;
-	write(data: string, cb: (error?: Error | null) => void): boolean;
-	write(data: string, encoding: BufferEncoding): boolean;
 	write(
-		data: string,
-		encoding: BufferEncoding,
-		cb: (error?: Error | null) => void
-	): boolean;
+		buffer: Uint8Array | string,
+		cb?: (err?: Error | null) => void
+	): DictResponse;
 	write(
-		data: string,
-		encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
-		cb?: (error?: Error | null) => unknown
-	): boolean {
-		if (typeof encodingOrCallback === 'function') {
-			return this.safeWrite(data, undefined, encodingOrCallback);
+		str: Uint8Array | string,
+		encoding?: BufferEncoding,
+		cb?: (err?: Error | null) => void
+	): DictResponse;
+
+	write(
+		input: Uint8Array | string,
+		cbOrEncoding?: ((err?: Error | null) => void) | BufferEncoding,
+		cb?: (err?: Error | null) => void
+	) {
+		if (typeof input !== 'string')
+			assertInstanceOf(input, Uint8Array, 'input');
+
+		if (typeof cbOrEncoding !== 'function') {
+			assertTypeOf(cbOrEncoding, 'string', 'encoding');
+			this.__socket.write(input, cbOrEncoding, cb);
+		} else {
+			this.__socket.write(input, cb);
 		}
-		return this.safeWrite(data, encodingOrCallback as BufferEncoding, cb);
-	}
-
-	/**
-	 * Sends status code 250 to the client, along with a text message ("ok" by default).
-	 *
-	 * @param message - The message to send instead of the default "ok".
-	 */
-	ok(message?: string) {
-		return message ? this.status(250, [], message) : this.status(250);
-	}
-
-	/**
-	 * Sends an error status code (500 by default) to the client, along with a text
-	 * message for that code (which is selected automatically if not specified).
-	 *
-	 * @param {number} code - The error status code to be sent.
-	 * Should be specified in RFC 2229.
-	 *
-	 * @param {string?} message - The message to send instead of the default.
-	 *
-	 * @see [RFC 2229, section 7](https://www.rfc-editor.org/rfc/rfc2229#section-7)
-	 */
-	error(code: number = 500, message?: string) {
-		return message ? this.status(code, [], message) : this.status(code);
-	}
-
-	/**
-	 * Closes the connection to the client. Use it with codes 421 or 221.
-	 *
-	 * @param {Function?} onClose - An optional callback that is invoked when the socket
-	 * is finished (see {@link Socket.end()}).
-	 */
-	close(onClose: () => unknown = () => {}) {
-		this.end(onClose);
 		return this;
 	}
 
-	/**
-	 * Sends a list of databases to the client.
-	 *
-	 * @param {DatabaseInfo[]} databases
-	 * An array of {@link DatabaseInfo} objects, representing databases to be presented.
-	 * If the array is empty, status code 554 is returned to the client.
-	 * @param {string} message - A message to be sent instead of
-	 * "databases present - text follows".
-	 * See {@link DictResponse.status()} for details.
-	 * @param {string} okMessage - A message to be sent at the end, along with code 250,
-	 * instead of "ok".
-	 */
-	writeDatabases(
-		databases: DatabaseInfo[],
-		message = 'databases present - text follows',
-		okMessage = 'ok'
-	) {
-		assertInstanceOf(databases, Array, 'databases');
-		assertTypeOf(message, 'string', 'message');
-		assertTypeOf(okMessage, 'string', 'okMessage');
+	initialize() {
+		if (this.initialized) return this;
+		this.initialized = true;
+		if (this.__onInit) this.__onInit(this);
+		return this;
+	}
 
-		if (databases.length > 0) {
+	onInit<T = unknown>(initializer: (response: DictResponse) => T) {
+		assertTypeOf(initializer, 'function', 'initializer');
+		this.__onInit = initializer;
+	}
+
+	writeln(input: string) {
+		assertTypeOf(input, 'string', 'input');
+		this.write(input.concat('\r\n'));
+		return this;
+	}
+
+	writeMultiline(input: string) {
+		assertTypeOf(input, 'string', 'input');
+		const lines = input.split(/\r?\n/);
+		for (const line of lines) {
+			if (line.startsWith('.')) {
+				this.writeln(`.${line}`);
+			} else {
+				this.writeln(line);
+			}
+		}
+		return this.writeln('.');
+	}
+
+	writeDefinitions(definitions: DictDefinition[]) {
+		assertArray(definitions, 'definitions');
+		this.status(150, definitions.length, this.__statusCodes[150]);
+		for (const definition of definitions) {
 			this.status(
-				110,
-				[],
-				message
-					? String(databases.length).concat(' ', message)
-					: statusText(110, databases.length)
-			)
-				.writeMessage(
-					databases
-						.map(({ name, description }) => `${name} "${description}"`)
-						.join('\r\n')
-				)
-				.ok(okMessage);
+				151,
+				`${definition.headword}`,
+				definition.dictionary,
+				`{definition.dictionaryDescription}`
+			);
+			this.writeMultiline(definition.definition);
+		}
+		this.status(250);
+	}
+	error(code: number): DictResponse;
+	error(code: number, message: string): DictResponse;
+	error(code: number, message?: string) {
+		assertTypeOf(code, 'number', 'code');
+		const errorHandler = this.__errorHandlers[code];
+		if (message !== undefined) {
+			assertTypeOf(message, 'string', 'message');
+			this.status(code, message);
+			const modified = structuredClone(this);
+			modified.write = () => this;
+
+			// Call error handler and suppress writes
+			errorHandler(code, this.lastCommand, modified);
+		} else if (errorHandler) {
+			errorHandler(code, this.lastCommand, this);
 			return this;
 		}
-
-		return this.status(554);
+		return this.status(code);
 	}
 
-	/**
-	 * Sends definitions to the client.
-	 *
-	 * @param {DictDefinition[]} definitions - An array of {@link DictDefinition} objects,
-	 * representing definitions to be sent. If the array is empty, status code 552 is
-	 * returned to the client.
-	 *
-	 * @param {string?} message - A message to be sent instead of the default
-	 * "definitions retrieved - text follows". See {@link DictResponse.status()} for details.
-	 *
-	 * @param {string?} okMessage - A message to be sent at the end, along with code 250,
-	 * instead of the default "ok".
-	 */
-	writeDefinitions(
-		definitions: DictDefinition[],
-		message?: string,
-		okMessage = 'ok'
-	) {
-		assertInstanceOf(definitions, Array, 'definitions');
-		if (message) assertTypeOf(message, 'string', 'message');
-		assertTypeOf(okMessage, 'string', 'okMessage');
-		if (definitions.length > 0) {
-			this.status(
-				150,
-				[],
-				`${
-					message
-						? String(definitions.length).concat(' ', message)
-						: statusText(150, definitions.length)
-				}`
-			);
-			this.writeDefinitionBlocks(definitions);
-			return this.ok(okMessage);
+	status(code: number, ...params: (string | number)[]) {
+		assertTypeOf(code, 'number', 'code');
+		for (const param of params) {
+			assertOneOfTypes(param, ['string', 'number'], 'param');
 		}
 
-		return this.error(552);
-	}
-
-	/**
-	 * Writes the definition blocks:
-	 * ```plaintext
-	 * 151 "headword" dictionary "dictionaryDescription"
-	 * header: value
-	 *
-	 * text
-	 * .
-	 * ```
-	 *
-	 * @param {DictDefinition[]} definitions - An array of {@link DictDefinition} objects,
-	 * representing definitions to send.
-	 */
-	writeDefinitionBlocks(definitions: DictDefinition[]) {
-		assertInstanceOf(definitions, Array, 'definitions');
-		for (const {
-			headword,
-			dictionary,
-			dictionaryDescription,
-			definition,
-			mimeHeaders
-		} of definitions) {
-			assertTypeOf(headword, 'string', 'headword');
-			assertTypeOf(dictionary, 'string', 'dictionary');
-			assertTypeOf(dictionaryDescription, 'string', 'dictionaryDescription');
-			assertTypeOf(definition, 'string', 'definition');
-			assertDefined(mimeHeaders, 'mimeHeaders');
-
-			this.status(151, [
-				{
-					HEADWORD: sanitize(lfToCrlf(headword)),
-					DICTNAME: sanitize(lfToCrlf(dictionary)),
-					DICTDESC: sanitize(lfToCrlf(dictionaryDescription))
-				}
-			]);
-			this.writeMessage(definition, mimeHeaders);
-		}
-		return this;
-	}
-
-	/**
-	 * Writes the match text:
-	 * ```plaintext
-	 * 152 N matches found - text follows
-	 * dictionaryA "match1"
-	 * dictionaryB "match2"
-	 * (etc.)
-	 * .
-	 * ```
-	 *
-	 * @param {MatchEntry[]} matches - An array of {@link MatchEntry} objects,
-	 * representing matches to send.
-	 */
-	writeMatches(
-		matches: MatchEntry[],
-		message: string = 'matches found - text follows',
-		okMessage = 'ok'
-	) {
-		assertInstanceOf(matches, Array, 'matches');
-		assertTypeOf(message, 'string', 'message');
-		assertTypeOf(okMessage, 'string', 'okMessage');
-
-		this.status(
-			152,
-			[matches.length],
-			`${
-				message
-					? String(matches.length).concat(' ', message)
-					: statusText(152, matches.length)
-			}`
+		if (params.length > 0) return this.writeln(`${code} ${params.join(' ')}`);
+		const defaultText = this.__statusCodes[String(code)];
+		return this.writeln(
+			String(code).concat(defaultText ? ' '.concat(defaultText) : '')
 		);
-		this.writeMessage(
-			matches
-				.map(({ word, dictionary }) => `${dictionary} "${word}"`)
-				.join('\r\n')
-		);
-		this.ok(okMessage);
-		return this;
 	}
 
-	/**
-	 * @private The TCP socket used for sending responses.
-	 */
-	private readonly __socket: Socket;
-
-	/** Checks if it's safe to write to the socket */
-	private isUsable(): boolean {
-		return !this.destroyed && this.writable;
+	enableMime() {
+		this.optionMime = true;
 	}
 
-	/** Internal safe write wrapper */
-	private safeWrite(data: string, encoding?: BufferEncoding, cb?: (error?: Error | null) => void): boolean {
-		if (!this.isUsable()) {
-			return false;
-		}
-		try {
-			// node: passing cb vs encoding needs branching
-			if (typeof encoding === 'function') {
-				return super.write(data, encoding as unknown as BufferEncoding);
-			}
-			if (cb) return super.write(data, encoding as BufferEncoding, cb);
-			if (encoding) return super.write(data, encoding);
-			return super.write(data);
-		} catch {
-			return false;
-		}
+	end(cb?: () => void) {
+		if (cb) assertTypeOf(cb, 'function', 'cb');
+		return this.__socket.end(cb);
+	}
+
+	private __onInit(response: DictResponse) {
+		const tokens = ['220', this.__hostname];
+		const welcomeMessage = this.__generateWelcome();
+
+		this.messageId = this.__generateMessageId();
+
+		if (welcomeMessage) tokens.push(welcomeMessage);
+		tokens.push(`<${this.__capabilities.join('.')}>`, this.messageId);
+		response.writeln(tokens.join(' '));
 	}
 }

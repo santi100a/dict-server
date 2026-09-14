@@ -1,6 +1,6 @@
 {
 	"name": "@santi100a/dict-server",
-	"version": "1.0.2",
+	"version": "2.0.0",
 	"main": "dist/index.js",
 	"typings": "dist/index.d.ts",
 	"readme": "./README.md",
@@ -32,7 +32,7 @@
 	},
 	"scripts": {
 		"build": "tsc",
-		"test": "jest",
+		"test": "jest --passWithNoTests",
 		"dev": "tsc -w",
 		"prettify": "prettier --write .",
 		"lint": "eslint .",

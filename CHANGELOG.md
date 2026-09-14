@@ -13,3 +13,7 @@
 ## Version 1.0.2
 
 - Added the `saslResp()` method.
+
+## Version 2.0.0
+
+- Redid everything.

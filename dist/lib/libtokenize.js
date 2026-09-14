@@ -1,5 +1,5 @@
 "use strict";
-exports.__esModule = true;
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.tokenize = void 0;
 var libtokenizehelpers_1 = require("./libtokenizehelpers");
 function tokenize(line) {

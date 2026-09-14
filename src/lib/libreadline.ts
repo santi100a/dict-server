@@ -1,108 +1,108 @@
 import type { Socket } from 'node:net';
 
 export function createLineReader(socket: Socket) {
-	let buffer = '';
-	let ended = false;
-	let destroyed = false;
+    let buffer = '';
+    let ended = false;
 
-	const lineQueue: string[] = [];
-	const waiterQueue: Array<{
-		resolve: (value: string | null) => void;
-		reject: (error: Error) => void;
-	}> = [];
+    const lineQueue: string[] = [];
+    const waiterQueue: Array<{
+        resolve: (value: string | null) => void;
+        reject: (error: Error) => void;
+    }> = [];
 
-	const processBuffer = () => {
-		let idx: number;
+    const cleanup = () => {
+        socket.removeListener('data', onData);
+        socket.removeListener('error', onError);
+        socket.removeListener('end', onEnd);
+        socket.removeListener('close', onClose);
+    };
 
-		// Support both CRLF and LF line endings
-		while ((idx = buffer.indexOf('\n')) !== -1) {
-			let line = buffer.slice(0, idx);
-			buffer = buffer.slice(idx + 1);
+    const processBuffer = () => {
+        let idx: number;
 
-			// Strip trailing \r if present
-			if (line.endsWith('\r')) line = line.slice(0, -1);
+        // Support both CRLF and LF line endings
+        while ((idx = buffer.indexOf('\n')) !== -1) {
+            let line = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 1);
 
-			const waiter = waiterQueue.shift();
-			if (waiter) {
-				waiter.resolve(line);
-			} else {
-				lineQueue.push(line);
-			}
-		}
-	};
+            // Strip trailing \r if present
+            if (line.endsWith('\r')) line = line.slice(0, -1);
 
-	const onData = (chunk: Buffer) => {
-		if (destroyed) return;
-		buffer += chunk.toString('utf8');
-		processBuffer();
-	};
+            const waiter = waiterQueue.shift();
+            if (waiter) {
+                waiter.resolve(line);
+            } else {
+                lineQueue.push(line);
+            }
+        }
+    };
 
-	const onError = (error: Error) => {
-		destroyed = true;
-		while (waiterQueue.length > 0) {
-			const waiter = waiterQueue.shift()!;
-			waiter.reject(error);
-		}
-	};
+    const onData = (chunk: Buffer) => {
+        if (ended) return;
+        buffer += chunk.toString('utf8');
+        processBuffer();
+    };
 
-	const onEnd = () => {
-		ended = true;
+    const onError = (error: Error) => {
+        if ((error as NodeJS.ErrnoException).code === 'ECONNRESET') {
+            onClose();
+            return;
+        }
+        ended = true;
+        cleanup();
+        while (waiterQueue.length > 0) {
+            waiterQueue.shift()!.reject(error);
+        }
+    };
 
-		// Flush any leftover data as a line
-		if (buffer.length > 0) {
-			lineQueue.push(buffer);
-			buffer = '';
-		}
+    const onEnd = () => {
+        onClose();
+    };
 
-		processBuffer();
+    const onClose = () => {
+        if (ended) return;
+        ended = true;
+        cleanup();
 
-		while (waiterQueue.length > 0) {
-			const waiter = waiterQueue.shift()!;
-			const line = lineQueue.shift() ?? null;
-			waiter.resolve(line);
-		}
-	};
+        // Flush any leftover data in buffer as a line
+        if (buffer.length > 0) {
+            lineQueue.push(buffer);
+            buffer = '';
+        }
 
-	const onClose = () => {
-		destroyed = true;
-		while (waiterQueue.length > 0) {
-			const waiter = waiterQueue.shift()!;
-			waiter.reject(new Error('Socket closed'));
-		}
-	};
+        processBuffer();
 
-	// Attach events
-	socket.on('data', onData);
-	socket.on('error', err => {
-		// Ignore ECONNRESET from clients disconnecting abruptly
-		if ((err as NodeJS.ErrnoException).code === 'ECONNRESET') return;
-		onError(err);
-	});
-	socket.once('end', onEnd);
-	socket.once('close', onClose);
+        // Resolve any remaining waiting calls with null (EOF)
+        while (waiterQueue.length > 0) {
+            const waiter = waiterQueue.shift()!;
+            const line = lineQueue.shift() ?? null;
+            waiter.resolve(line);
+        }
+    };
 
-	// The actual readLine function
-	return function readLine(): Promise<string | null> {
-		return new Promise((resolve, reject) => {
-			if (destroyed) {
-				reject(new Error('Socket destroyed'));
-				return;
-			}
+    // Attach events
+    socket.on('data', onData);
+    socket.on('error', onError);
+    socket.once('end', onEnd);
+    socket.once('close', onClose);
 
-			// If a line is already buffered, return it immediately
-			if (lineQueue.length > 0) {
-				resolve(lineQueue.shift()!);
-				return;
-			}
+    // The actual readLine function
+    return function readLine(): Promise<string | null> {
+        return new Promise((resolve, reject) => {
+            // If a line is already buffered, return it immediately
+            if (lineQueue.length > 0) {
+                resolve(lineQueue.shift()!);
+                return;
+            }
 
-			// If socket ended, return null
-			if (ended) {
-				resolve(null);
-				return;
-			}
+            // If socket ended or closed, return null cleanly
+            if (ended) {
+                resolve(null);
+                return;
+            }
 
-			// Otherwise, wait for data
-			waiterQueue.push({ resolve, reject });
-		});
-	};
+            // Otherwise, wait for data
+            waiterQueue.push({ resolve, reject });
+        });
+    };
 }

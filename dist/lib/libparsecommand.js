@@ -1,5 +1,5 @@
 "use strict";
-exports.__esModule = true;
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.parseCommand = void 0;
 var libtokenize_1 = require("./libtokenize");
 var SHOW_MAP = {
@@ -31,7 +31,7 @@ function parseCommand(line) {
         }
     }
     // OPTION normalization
-    if (name === 'OPTION' && parameters[0].toUpperCase() === 'MIME') {
+    if (name === 'OPTION' && firstParameter === 'MIME') {
         return {
             raw: raw,
             name: 'OPTION MIME',

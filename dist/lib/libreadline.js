@@ -1,12 +1,17 @@
 "use strict";
-exports.__esModule = true;
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.createLineReader = void 0;
 function createLineReader(socket) {
     var buffer = '';
     var ended = false;
-    var destroyed = false;
     var lineQueue = [];
     var waiterQueue = [];
+    var cleanup = function () {
+        socket.removeListener('data', onData);
+        socket.removeListener('error', onError);
+        socket.removeListener('end', onEnd);
+        socket.removeListener('close', onClose);
+    };
     var processBuffer = function () {
         var idx;
         // Support both CRLF and LF line endings
@@ -26,63 +31,58 @@ function createLineReader(socket) {
         }
     };
     var onData = function (chunk) {
-        if (destroyed)
+        if (ended)
             return;
         buffer += chunk.toString('utf8');
         processBuffer();
     };
     var onError = function (error) {
-        destroyed = true;
+        if (error.code === 'ECONNRESET') {
+            onClose();
+            return;
+        }
+        ended = true;
+        cleanup();
         while (waiterQueue.length > 0) {
-            var waiter = waiterQueue.shift();
-            waiter.reject(error);
+            waiterQueue.shift().reject(error);
         }
     };
     var onEnd = function () {
+        onClose();
+    };
+    var onClose = function () {
         var _a;
+        if (ended)
+            return;
         ended = true;
-        // Flush any leftover data as a line
+        cleanup();
+        // Flush any leftover data in buffer as a line
         if (buffer.length > 0) {
             lineQueue.push(buffer);
             buffer = '';
         }
         processBuffer();
+        // Resolve any remaining waiting calls with null (EOF)
         while (waiterQueue.length > 0) {
             var waiter = waiterQueue.shift();
             var line = (_a = lineQueue.shift()) !== null && _a !== void 0 ? _a : null;
             waiter.resolve(line);
         }
     };
-    var onClose = function () {
-        destroyed = true;
-        while (waiterQueue.length > 0) {
-            var waiter = waiterQueue.shift();
-            waiter.reject(new Error('Socket closed'));
-        }
-    };
     // Attach events
     socket.on('data', onData);
-    socket.on('error', function (err) {
-        // Ignore ECONNRESET from clients disconnecting abruptly
-        if (err.code === 'ECONNRESET')
-            return;
-        onError(err);
-    });
+    socket.on('error', onError);
     socket.once('end', onEnd);
     socket.once('close', onClose);
     // The actual readLine function
     return function readLine() {
         return new Promise(function (resolve, reject) {
-            if (destroyed) {
-                reject(new Error('Socket destroyed'));
-                return;
-            }
             // If a line is already buffered, return it immediately
             if (lineQueue.length > 0) {
                 resolve(lineQueue.shift());
                 return;
             }
-            // If socket ended, return null
+            // If socket ended or closed, return null cleanly
             if (ended) {
                 resolve(null);
                 return;

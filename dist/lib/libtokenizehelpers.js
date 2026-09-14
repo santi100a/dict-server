@@ -1,5 +1,5 @@
 "use strict";
-exports.__esModule = true;
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.isWhitespace = exports.isOpeningQuote = exports.handleQuotedChar = void 0;
 function handleQuotedChar(char, quote, current) {
     if (quote) {

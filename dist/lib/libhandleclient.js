@@ -35,7 +35,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-exports.__esModule = true;
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleClient = void 0;
 var libparsecommand_1 = require("./libparsecommand");
 var libreadline_1 = require("./libreadline");
@@ -57,10 +57,10 @@ function handleClient(socket, onCommand, response) {
                     if (!line.trim()) {
                         return [3 /*break*/, 1];
                     }
-                    if (!(line.length > 1024)) return [3 /*break*/, 4];
+                    if (!(line.length > 1022)) return [3 /*break*/, 4];
                     // Line too long - invalid!
                     return [4 /*yield*/, onCommand({
-                            raw: line.split('').slice(0, 1024).join(''),
+                            raw: line.split('').slice(0, 1022).join(''),
                             name: '',
                             parameters: [],
                             syntaxValid: false

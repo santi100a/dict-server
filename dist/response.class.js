@@ -1,312 +1,126 @@
 "use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    };
-    return function (d, b) {
-        if (typeof b !== "function" && b !== null)
-            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
-var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
-    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-        if (ar || !(i in from)) {
-            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-        }
-    }
-    return to.concat(ar || Array.prototype.slice.call(from));
-};
-exports.__esModule = true;
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.DictResponse = void 0;
-var assertDefined = require("@santi100a/assertion-lib/cjs/defined");
-var assertInstanceOf = require("@santi100a/assertion-lib/cjs/instance-of");
-var assertTypeOf = require("@santi100a/assertion-lib/cjs/type-of");
-var node_net_1 = require("node:net");
-var libdotstuff_1 = require("./lib/libdotstuff");
-var liblftocrlf_1 = require("./lib/liblftocrlf");
-var libsanitize_1 = require("./lib/libsanitize");
-var libstatuscodes_1 = require("./lib/libstatuscodes");
-/**
- * Utility class for responses from the DICT server.
- * All methods of this class can be chained, except for `write()`.
- */
-var DictResponse = /** @class */ (function (_super) {
-    __extends(DictResponse, _super);
-    function DictResponse(socket) {
-        var _this = _super.call(this) || this;
-        /** @readonly Whether or not MIME headers are enabled by the `OPTION MIME` command. */
-        _this.optionMimeEnabled = false;
-        /** @readonly The text specified in the `CLIENT` command. */
-        _this.clientText = '';
-        _this.__socket = socket;
-        // Set __socket BEFORE changing prototype
-        Object.defineProperty(socket, '__socket', {
-            value: socket,
-            writable: false,
-            enumerable: false,
-            configurable: false
-        });
-        // Now change the prototype
-        Object.setPrototypeOf(socket, DictResponse.prototype);
-        // Return the modified socket
-        return socket;
+var assertion_lib_1 = require("@santi100a/assertion-lib");
+var DictResponse = /** @class */ (function () {
+    function DictResponse(__socket, __hostname, __capabilities, __statusCodes, __errorHandlers, __generateMessageId, __generateWelcome) {
+        this.__socket = __socket;
+        this.__hostname = __hostname;
+        this.__capabilities = __capabilities;
+        this.__statusCodes = __statusCodes;
+        this.__errorHandlers = __errorHandlers;
+        this.__generateMessageId = __generateMessageId;
+        this.__generateWelcome = __generateWelcome;
+        this.lastCommand = null;
+        this.initialized = false;
+        this.authenticated = false;
+        this.optionMime = false;
+        this.messageId = '';
+        this.clientName = '';
     }
-    /**
-     * Writes a string as an RFC 5322 internet message (i.e. headers, text,
-     * and `<CRLF>.<CRLF>`).
-     *
-     * @param {string} message - The raw text body of the message.
-     * @param {Record} headers - The headers to be added before the message.
-     */
-    DictResponse.prototype.writeMessage = function (message, headers) {
-        if (headers === void 0) { headers = {}; }
-        for (var _i = 0, _a = Object.entries(headers); _i < _a.length; _i++) {
-            var _b = _a[_i], key = _b[0], value = _b[1];
-            this.writeLine("".concat(key, ": ").concat(value));
+    DictResponse.prototype.write = function (input, cbOrEncoding, cb) {
+        if (typeof input !== 'string')
+            (0, assertion_lib_1.assertInstanceOf)(input, Uint8Array, 'input');
+        if (typeof cbOrEncoding !== 'function') {
+            (0, assertion_lib_1.assertTypeOf)(cbOrEncoding, 'string', 'encoding');
+            this.__socket.write(input, cbOrEncoding, cb);
         }
-        if (Object.entries(headers).length > 0)
-            this.writeLine();
-        for (var _c = 0, _d = (0, libdotstuff_1.dotStuff)((0, liblftocrlf_1.lfToCrlf)(message)).split('\r\n'); _c < _d.length; _c++) {
-            var line = _d[_c];
-            this.writeLine(line);
+        else {
+            this.__socket.write(input, cb);
         }
-        this.writeLine('.');
         return this;
     };
-    /**
-     * Writes a line of text and appends `<CRLF>` at the end.
-     *
-     * @param {string} line - The line to be written. Shouldn't include CR or LF.
-     */
-    DictResponse.prototype.writeLine = function (line) {
-        if (line === void 0) { line = ''; }
-        this.safeWrite((0, libsanitize_1.sanitize)(line) + '\r\n');
+    DictResponse.prototype.initialize = function () {
+        if (this.initialized)
+            return this;
+        this.initialized = true;
+        if (this.__onInit)
+            this.__onInit(this);
         return this;
     };
-    /**
-     *
-     * @param {number} code - The status code to be set.
-     * Should be specified in [RFC 2229](https://www.rfc-editor.org/rfc/rfc2229#section-7).
-     * @param params - Parameters to be specified for the status code:
-     * @example
-     *
-     * response.status(110, [4]); // will send: '110 4 databases present - text follows'
-     * response.status(150, [3]); // will send: '150 3 definitions retrieved - text follows'
-     * response.status(151, [{
-     * 	HEADWORD: 'word',
-     * 	DICTNAME: 'dictionary',
-     * 	DICTDESC: 'Dictionary Name'
-     * }]); // will send: '151 "word" dictionary "Dictionary Name"'
-     *
-     * @param {string?} message - The message to send instead of the default
-     * "definitions retrieved - text follows".
-     * @example
-     *
-     * response.status(110, [3], 'definition blocks found:'); // will send: '110 3 definitions blocks found:'
-     *
-     * @see [RFC 2229, section 7](https://www.rfc-editor.org/rfc/rfc2229#section-7)
-     */
-    DictResponse.prototype.status = function (code, params, message) {
-        if (params === void 0) { params = []; }
-        if (message === void 0) { message = libstatuscodes_1.statusText.apply(void 0, __spreadArray([code], params, false)); }
-        return this.writeLine("".concat(code, " ").concat(message));
+    DictResponse.prototype.onInit = function (initializer) {
+        (0, assertion_lib_1.assertTypeOf)(initializer, 'function', 'initializer');
+        this.__onInit = initializer;
     };
-    DictResponse.prototype.write = function (data, encodingOrCallback, cb) {
-        if (typeof encodingOrCallback === 'function') {
-            return this.safeWrite(data, undefined, encodingOrCallback);
+    DictResponse.prototype.writeln = function (input) {
+        (0, assertion_lib_1.assertTypeOf)(input, 'string', 'input');
+        this.write(input.concat('\r\n'));
+        return this;
+    };
+    DictResponse.prototype.writeMultiline = function (input) {
+        (0, assertion_lib_1.assertTypeOf)(input, 'string', 'input');
+        var lines = input.split(/\r?\n/);
+        for (var _i = 0, lines_1 = lines; _i < lines_1.length; _i++) {
+            var line = lines_1[_i];
+            if (line.startsWith('.')) {
+                this.writeln(".".concat(line));
+            }
+            else {
+                this.writeln(line);
+            }
         }
-        return this.safeWrite(data, encodingOrCallback, cb);
+        return this.writeln('.');
     };
-    /**
-     * Sends status code 250 to the client, along with a text message ("ok" by default).
-     *
-     * @param message - The message to send instead of the default "ok".
-     */
-    DictResponse.prototype.ok = function (message) {
-        return message ? this.status(250, [], message) : this.status(250);
+    DictResponse.prototype.writeDefinitions = function (definitions) {
+        (0, assertion_lib_1.assertArray)(definitions, 'definitions');
+        this.status(150, definitions.length, this.__statusCodes[150]);
+        for (var _i = 0, definitions_1 = definitions; _i < definitions_1.length; _i++) {
+            var definition = definitions_1[_i];
+            this.status(151, "".concat(definition.headword), definition.dictionary, "{definition.dictionaryDescription}");
+            this.writeMultiline(definition.definition);
+        }
+        this.status(250);
     };
-    /**
-     * Sends an error status code (500 by default) to the client, along with a text
-     * message for that code (which is selected automatically if not specified).
-     *
-     * @param {number} code - The error status code to be sent.
-     * Should be specified in RFC 2229.
-     *
-     * @param {string?} message - The message to send instead of the default.
-     *
-     * @see [RFC 2229, section 7](https://www.rfc-editor.org/rfc/rfc2229#section-7)
-     */
     DictResponse.prototype.error = function (code, message) {
-        if (code === void 0) { code = 500; }
-        return message ? this.status(code, [], message) : this.status(code);
-    };
-    /**
-     * Closes the connection to the client. Use it with codes 421 or 221.
-     *
-     * @param {Function?} onClose - An optional callback that is invoked when the socket
-     * is finished (see {@link Socket.end()}).
-     */
-    DictResponse.prototype.close = function (onClose) {
-        if (onClose === void 0) { onClose = function () { }; }
-        this.end(onClose);
-        return this;
-    };
-    /**
-     * Sends a list of databases to the client.
-     *
-     * @param {DatabaseInfo[]} databases
-     * An array of {@link DatabaseInfo} objects, representing databases to be presented.
-     * If the array is empty, status code 554 is returned to the client.
-     * @param {string} message - A message to be sent instead of
-     * "databases present - text follows".
-     * See {@link DictResponse.status()} for details.
-     * @param {string} okMessage - A message to be sent at the end, along with code 250,
-     * instead of "ok".
-     */
-    DictResponse.prototype.writeDatabases = function (databases, message, okMessage) {
-        if (message === void 0) { message = 'databases present - text follows'; }
-        if (okMessage === void 0) { okMessage = 'ok'; }
-        assertInstanceOf(databases, Array, 'databases');
-        assertTypeOf(message, 'string', 'message');
-        assertTypeOf(okMessage, 'string', 'okMessage');
-        if (databases.length > 0) {
-            this.status(110, [], message
-                ? String(databases.length).concat(' ', message)
-                : (0, libstatuscodes_1.statusText)(110, databases.length))
-                .writeMessage(databases
-                .map(function (_a) {
-                var name = _a.name, description = _a.description;
-                return "".concat(name, " \"").concat(description, "\"");
-            })
-                .join('\r\n'))
-                .ok(okMessage);
+        var _this = this;
+        (0, assertion_lib_1.assertTypeOf)(code, 'number', 'code');
+        var errorHandler = this.__errorHandlers[code];
+        if (message !== undefined) {
+            (0, assertion_lib_1.assertTypeOf)(message, 'string', 'message');
+            this.status(code, message);
+            var modified = structuredClone(this);
+            modified.write = function () { return _this; };
+            // Call error handler and suppress writes
+            errorHandler(code, this.lastCommand, modified);
+        }
+        else if (errorHandler) {
+            errorHandler(code, this.lastCommand, this);
             return this;
         }
-        return this.status(554);
+        return this.status(code);
     };
-    /**
-     * Sends definitions to the client.
-     *
-     * @param {DictDefinition[]} definitions - An array of {@link DictDefinition} objects,
-     * representing definitions to be sent. If the array is empty, status code 552 is
-     * returned to the client.
-     *
-     * @param {string?} message - A message to be sent instead of the default
-     * "definitions retrieved - text follows". See {@link DictResponse.status()} for details.
-     *
-     * @param {string?} okMessage - A message to be sent at the end, along with code 250,
-     * instead of the default "ok".
-     */
-    DictResponse.prototype.writeDefinitions = function (definitions, message, okMessage) {
-        if (okMessage === void 0) { okMessage = 'ok'; }
-        assertInstanceOf(definitions, Array, 'definitions');
-        if (message)
-            assertTypeOf(message, 'string', 'message');
-        assertTypeOf(okMessage, 'string', 'okMessage');
-        if (definitions.length > 0) {
-            this.status(150, [], "".concat(message
-                ? String(definitions.length).concat(' ', message)
-                : (0, libstatuscodes_1.statusText)(150, definitions.length)));
-            this.writeDefinitionBlocks(definitions);
-            return this.ok(okMessage);
+    DictResponse.prototype.status = function (code) {
+        var params = [];
+        for (var _i = 1; _i < arguments.length; _i++) {
+            params[_i - 1] = arguments[_i];
         }
-        return this.error(552);
+        (0, assertion_lib_1.assertTypeOf)(code, 'number', 'code');
+        for (var _a = 0, params_1 = params; _a < params_1.length; _a++) {
+            var param = params_1[_a];
+            (0, assertion_lib_1.assertOneOfTypes)(param, ['string', 'number'], 'param');
+        }
+        if (params.length > 0)
+            return this.writeln("".concat(code, " ").concat(params.join(' ')));
+        var defaultText = this.__statusCodes[String(code)];
+        return this.writeln(String(code).concat(defaultText ? ' '.concat(defaultText) : ''));
     };
-    /**
-     * Writes the definition blocks:
-     * ```plaintext
-     * 151 "headword" dictionary "dictionaryDescription"
-     * header: value
-     *
-     * text
-     * .
-     * ```
-     *
-     * @param {DictDefinition[]} definitions - An array of {@link DictDefinition} objects,
-     * representing definitions to send.
-     */
-    DictResponse.prototype.writeDefinitionBlocks = function (definitions) {
-        assertInstanceOf(definitions, Array, 'definitions');
-        for (var _i = 0, definitions_1 = definitions; _i < definitions_1.length; _i++) {
-            var _a = definitions_1[_i], headword = _a.headword, dictionary = _a.dictionary, dictionaryDescription = _a.dictionaryDescription, definition = _a.definition, mimeHeaders = _a.mimeHeaders;
-            assertTypeOf(headword, 'string', 'headword');
-            assertTypeOf(dictionary, 'string', 'dictionary');
-            assertTypeOf(dictionaryDescription, 'string', 'dictionaryDescription');
-            assertTypeOf(definition, 'string', 'definition');
-            assertDefined(mimeHeaders, 'mimeHeaders');
-            this.status(151, [
-                {
-                    HEADWORD: (0, libsanitize_1.sanitize)((0, liblftocrlf_1.lfToCrlf)(headword)),
-                    DICTNAME: (0, libsanitize_1.sanitize)((0, liblftocrlf_1.lfToCrlf)(dictionary)),
-                    DICTDESC: (0, libsanitize_1.sanitize)((0, liblftocrlf_1.lfToCrlf)(dictionaryDescription))
-                }
-            ]);
-            this.writeMessage(definition, mimeHeaders);
-        }
-        return this;
+    DictResponse.prototype.enableMime = function () {
+        this.optionMime = true;
     };
-    /**
-     * Writes the match text:
-     * ```plaintext
-     * 152 N matches found - text follows
-     * dictionaryA "match1"
-     * dictionaryB "match2"
-     * (etc.)
-     * .
-     * ```
-     *
-     * @param {MatchEntry[]} matches - An array of {@link MatchEntry} objects,
-     * representing matches to send.
-     */
-    DictResponse.prototype.writeMatches = function (matches, message, okMessage) {
-        if (message === void 0) { message = 'matches found - text follows'; }
-        if (okMessage === void 0) { okMessage = 'ok'; }
-        assertInstanceOf(matches, Array, 'matches');
-        assertTypeOf(message, 'string', 'message');
-        assertTypeOf(okMessage, 'string', 'okMessage');
-        this.status(152, [matches.length], "".concat(message
-            ? String(matches.length).concat(' ', message)
-            : (0, libstatuscodes_1.statusText)(152, matches.length)));
-        this.writeMessage(matches
-            .map(function (_a) {
-            var word = _a.word, dictionary = _a.dictionary;
-            return "".concat(dictionary, " \"").concat(word, "\"");
-        })
-            .join('\r\n'));
-        this.ok(okMessage);
-        return this;
+    DictResponse.prototype.end = function (cb) {
+        if (cb)
+            (0, assertion_lib_1.assertTypeOf)(cb, 'function', 'cb');
+        return this.__socket.end(cb);
     };
-    /** Checks if it's safe to write to the socket */
-    DictResponse.prototype.isUsable = function () {
-        return !this.destroyed && this.writable;
-    };
-    /** Internal safe write wrapper */
-    DictResponse.prototype.safeWrite = function (data, encoding, cb) {
-        if (!this.isUsable()) {
-            return false;
-        }
-        try {
-            // node: passing cb vs encoding needs branching
-            if (typeof encoding === 'function') {
-                return _super.prototype.write.call(this, data, encoding);
-            }
-            if (cb)
-                return _super.prototype.write.call(this, data, encoding, cb);
-            if (encoding)
-                return _super.prototype.write.call(this, data, encoding);
-            return _super.prototype.write.call(this, data);
-        }
-        catch (_a) {
-            return false;
-        }
+    DictResponse.prototype.__onInit = function (response) {
+        var tokens = ['220', this.__hostname];
+        var welcomeMessage = this.__generateWelcome();
+        this.messageId = this.__generateMessageId();
+        if (welcomeMessage)
+            tokens.push(welcomeMessage);
+        tokens.push("<".concat(this.__capabilities.join('.'), ">"), this.messageId);
+        response.writeln(tokens.join(' '));
     };
     return DictResponse;
-}(node_net_1.Socket));
+}());
 exports.DictResponse = DictResponse;
